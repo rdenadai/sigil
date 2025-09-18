@@ -8,6 +8,7 @@ from src.lexer.token import (
     TokenIdentifier,
     TokenIndentation,
     TokenKeyword,
+    TokenKeywordSpecial,
     TokenLiteral,
     TokenOperator,
 )
@@ -405,6 +406,63 @@ def test_lexer_math_constants(constant: str):
     assert [token.type for token in tokens] == expected_types
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == constant
+
+
+@pytest.mark.parametrize("lambda_keyword", ["lambda", "LAMBDA", "λ", "Λ"])
+def test_lexer_simple_lambda(lambda_keyword: str):
+    code = f"const square = {lambda_keyword} x: x * x"
+
+    lexer = Lexer(filename="simple_lambda.sl", lines=[code])
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.CONST,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenKeyword.LAMBDA if lambda_keyword.lower() == "lambda" else TokenKeywordSpecial.LAMBDA_SPECIAL,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.MULTIPLY,
+        TokenIdentifier.IDENTIFIER,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+
+
+def test_lexer_lambda():
+    code = "let add: callable = lambda a: int32, b: int32 -> int32: a + b"
+
+    lexer = Lexer(filename="lambda.sl", lines=[code])
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenKeyword.CALLABLE,
+        TokenOperator.EQUAL,
+        TokenKeyword.LAMBDA,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenKeyword.INT32,
+        TokenDelimiter.COMMA,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenKeyword.INT32,
+        TokenOperator.ARROW,
+        TokenKeyword.INT32,
+        TokenDelimiter.COLON,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.PLUS,
+        TokenIdentifier.IDENTIFIER,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
 
 
 def test_lexer_basic():
