@@ -1,2 +1,3 @@
-# sigil
+# Sigil
+
 Sigil, the programming language
