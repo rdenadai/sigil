@@ -4,14 +4,16 @@ from src.lexer.token import (
     TokenIdentifier,
     TokenIndentation,
     TokenKeyword,
+    TokenKeywordSpecial,
     TokenLiteral,
     TokenOperator,
+    TokenType,
 )
 
 # Map lexemes to TokenOperator/TokenDelimiter (include longest first-safe set)
 OP_MAP: dict[str, TokenOperator | TokenDelimiter | TokenLiteral] = {
     "**": TokenOperator.POWER,
-    "*": TokenOperator.STAR,
+    "*": TokenOperator.MULTIPLY,
     "/": TokenOperator.DIV,
     "+": TokenOperator.PLUS,
     "-": TokenOperator.MINUS,
@@ -30,6 +32,10 @@ OP_MAP: dict[str, TokenOperator | TokenDelimiter | TokenLiteral] = {
     "<": TokenOperator.LESS,
     ">": TokenOperator.GREATER,
     "&": TokenOperator.AMPERSAND,
+    "|": TokenOperator.BAR,
+    "!": TokenOperator.EXCLAMATION,
+    "~": TokenOperator.TILDE,
+    "@": TokenOperator.AT,
     "^": TokenOperator.CARET,
     ",": TokenDelimiter.COMMA,
     ";": TokenDelimiter.SEMICOLON,
@@ -44,6 +50,12 @@ OP_MAP: dict[str, TokenOperator | TokenDelimiter | TokenLiteral] = {
     "...": TokenLiteral.ELLIPSIS,
 }
 
+# Map special keywords (non-ASCII) to TokenKeywordSpecial
+KEYWORD_SPECIAL_MAP: dict[str, TokenKeywordSpecial] = {
+    "λ": TokenKeywordSpecial.LAMBDA_SPECIAL,
+    "Λ": TokenKeywordSpecial.LAMBDA_SPECIAL,
+}
+
 
 class Lexer:
     """A simple lexer for the Sigil programming language."""
@@ -55,12 +67,30 @@ class Lexer:
         self._tokens: list[Token] = []
         self._indent_stack = [0]  # Stack to manage indentation levels
         self._prepare_operator_tables()
+        self._prepare_keyword_special_tables()
+
+    def _prepare_keyword_special_tables(self):
+        """Prepares keyword mapping for quick lookup."""
+        self._keywords_special = list(KEYWORD_SPECIAL_MAP.keys())
+        self._keywords_special.sort(key=len, reverse=True)
 
     def _prepare_operator_tables(self):
         """Pre-sorts operators for maximal munch matching."""
         self._operators = list(OP_MAP.keys())
         self._operators.sort(key=len, reverse=True)
         self._op_first_chars = {op[0] for op in self._operators}
+
+    def _add_token(self, token_type: TokenType, value: str, column: int):
+        """Helper to create and append a token."""
+        self._tokens.append(
+            Token(
+                filename=self._filename,
+                line=self._line_number,
+                column=column,
+                type=token_type,
+                value=value,
+            )
+        )
 
     def _is_ident_start(self, ch: str) -> bool:
         return ch.isalpha() or ch == "_" or ord(ch) > 127
@@ -71,11 +101,13 @@ class Lexer:
     def _is_operator_start(self, ch: str) -> bool:
         return ch in self._op_first_chars
 
-    def _record_regular_keyword(self, lexeme: str) -> TokenKeyword | TokenIdentifier:
+    def _record_regular_keyword(self, lexeme: str) -> TokenKeyword | TokenKeywordSpecial | TokenIdentifier:
         """Records regular keywords and identifiers."""
         w = lexeme.upper()
         if w in TokenKeyword.__members__:
             return TokenKeyword[w]
+        elif lexeme in self._keywords_special:
+            return KEYWORD_SPECIAL_MAP[lexeme]
         return TokenIdentifier.IDENTIFIER
 
     def _match_operator(self, line: str, i: int):
@@ -88,7 +120,7 @@ class Lexer:
         return None
 
     def _record_special_literal(self, lexeme: str) -> TokenLiteral | None:
-        """Records special literals like booleans, None, and ellipsis."""
+        """Records special literals like booleans, None."""
         if lexeme in {"true", "false"}:
             return TokenLiteral.BOOLEAN
         elif lexeme == "none":
@@ -133,28 +165,6 @@ class Lexer:
                 return TokenLiteral.COMPLEX
         return None
 
-    def _record_string_literal(
-        self,
-        i: int,
-        line: str,
-    ) -> tuple[str, int] | None:
-        """Records string literals, handling escape sequences."""
-        if line[i] == "'":
-            start = i + 1  # Skip opening quote
-            i += 1
-            L = len(line)
-            while i < L:
-                if line[i] == "\\" and i + 1 < L:
-                    i += 2  # Skip escaped character
-                elif line[i] == "'":
-                    i += 1  # Include closing quote
-                    return line[start : i - 1], i
-                else:
-                    i += 1
-            else:
-                raise SyntaxError("Unterminated string literal")
-        return None
-
     def _record_numeric_literal(self, i: int, line: str) -> tuple[TokenLiteral, str, int] | None:
         """Records numeric literals (integer, float, complex)."""
         start = i
@@ -188,15 +198,42 @@ class Lexer:
         if not lexeme:
             return None
 
-        if (token_type := self._record_integer_literal(lexeme)) is not None:
+        # The order of checks is important to avoid misclassification.
+        # A complex number like '3i' could be seen as an integer '3'.
+        # A float '3.0' could be seen as an integer '3'.
+        # Order: Complex -> Float -> Integer
+        if (token_type := self._record_complex_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
         if (token_type := self._record_float_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
-        if (token_type := self._record_complex_literal(lexeme)) is not None:
+        if (token_type := self._record_integer_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
         return None
 
+    def _record_string_literal(
+        self,
+        i: int,
+        line: str,
+    ) -> tuple[str, int] | None:
+        """Records string literals, handling escape sequences."""
+        if line[i] == "'":
+            start = i + 1  # Skip opening quote
+            i += 1
+            L = len(line)
+            while i < L:
+                if line[i] == "\\" and i + 1 < L:
+                    i += 2  # Skip escaped character
+                elif line[i] == "'":
+                    i += 1  # Include closing quote
+                    return line[start : i - 1], i
+                else:
+                    i += 1
+            else:
+                raise SyntaxError("Unterminated string literal")
+        return None
+
     def _tokenize_line(self, line: str, leading_spaces: int):
+        """Tokenizes a single line of code."""
         i, L = 0, len(line)
         while i < L:
             ch = line[i]
@@ -214,31 +251,16 @@ class Lexer:
             string_literal_result = self._record_string_literal(i, line)
             if string_literal_result is not None:
                 lexeme, new_i = string_literal_result
-                self._tokens.append(
-                    Token(
-                        filename=self._filename,
-                        line=self._line_number,
-                        column=leading_spaces + i,  # opening quote position
-                        type=TokenLiteral.STRING,
-                        value=lexeme,
-                    )
-                )
+                self._add_token(TokenLiteral.STRING, lexeme, leading_spaces + i)
                 i = new_i
                 continue
 
+            # Numeric Literals
             if ch.isdigit() or (ch == "." and i + 1 < L and line[i + 1].isdigit()):
                 num_result = self._record_numeric_literal(i, line)
                 if num_result:
                     token_type, lexeme, new_i = num_result
-                    self._tokens.append(
-                        Token(
-                            filename=self._filename,
-                            line=self._line_number,
-                            column=leading_spaces + i,
-                            type=token_type,
-                            value=lexeme,
-                        )
-                    )
+                    self._add_token(token_type, lexeme, leading_spaces + i)
                     i = new_i
                     continue
 
@@ -253,50 +275,28 @@ class Lexer:
 
                 token_type = self._record_special_literal(lexeme)
                 if token_type is not None:
-                    self._tokens.append(
-                        Token(
-                            filename=self._filename,
-                            line=self._line_number,
-                            column=column,
-                            type=token_type,
-                            value=lexeme,
-                        )
-                    )
+                    self._add_token(token_type, lexeme, column)
                     continue
 
                 token_type = self._record_regular_keyword(lexeme)
-                self._tokens.append(
-                    Token(
-                        filename=self._filename,
-                        line=self._line_number,
-                        column=column,
-                        type=token_type,
-                        value=lexeme,
-                    )
-                )
+                self._add_token(token_type, lexeme, column)
                 continue
 
             # Operators and Delimiters
             op_result = self._match_operator(line, i)
             if op_result:
                 lexeme, new_i = op_result
-                self._tokens.append(
-                    Token(
-                        filename=self._filename,
-                        line=self._line_number,
-                        column=leading_spaces + i,
-                        type=OP_MAP[lexeme],
-                        value=lexeme,
-                    )
-                )
+                self._add_token(OP_MAP[lexeme], lexeme, leading_spaces + i)
                 i = new_i
                 continue
 
+            # If we reach here, it's an unknown character
             raise SyntaxError(
                 f"Unknown character: '{ch}' at {self._filename}:{self._line_number}:{leading_spaces + i + 1}"
             )
 
     def tokenize(self):
+        """Tokenizes the input lines into a list of tokens."""
         for line_number, raw_line in enumerate(self._lines, 1):
             self._line_number = line_number
             line = raw_line
@@ -319,27 +319,11 @@ class Lexer:
             # Handle INDENT/DEDENT (spaces only)
             if leading_spaces > self._indent_stack[-1]:
                 self._indent_stack.append(leading_spaces)
-                self._tokens.append(
-                    Token(
-                        filename=self._filename,
-                        line=line_number,
-                        column=leading_spaces,
-                        type=TokenIndentation.INDENT,
-                        value=" " * leading_spaces,
-                    )
-                )
+                self._add_token(TokenIndentation.INDENT, " " * leading_spaces, 1)
 
             while leading_spaces < self._indent_stack[-1]:
                 self._indent_stack.pop()
-                self._tokens.append(
-                    Token(
-                        filename=self._filename,
-                        line=line_number,
-                        column=1,
-                        type=TokenIndentation.DEDENT,
-                        value="",
-                    )
-                )
+                self._add_token(TokenIndentation.DEDENT, "", 1)
 
             if leading_spaces != self._indent_stack[-1]:
                 raise IndentationError(f"Unindent does not match any outer indentation level. (line {line_number})")
@@ -347,36 +331,12 @@ class Lexer:
             # Tokenize the actual line content (without leading indentation)
             content = line[leading_spaces:]
             self._tokenize_line(content, leading_spaces=leading_spaces)
-            self._tokens.append(
-                Token(
-                    filename=self._filename,
-                    line=line_number,
-                    column=len(line) - 1,
-                    type=TokenIndentation.NEWLINE,
-                    value="\n",
-                )
-            )
+            self._add_token(TokenIndentation.NEWLINE, "\n", len(line) - 1)
 
         # Close remaining indentations
         while len(self._indent_stack) > 1:
             self._indent_stack.pop()
-            self._tokens.append(
-                Token(
-                    filename=self._filename,
-                    line=len(self._lines),
-                    column=1,
-                    type=TokenIndentation.DEDENT,
-                    value="",
-                )
-            )
+            self._add_token(TokenIndentation.DEDENT, "", 1)
 
-        self._tokens.append(
-            Token(
-                filename=self._filename,
-                line=len(self._lines) + 1,
-                column=1,
-                type=TokenIndentation.EOF,
-                value="",
-            )
-        )
+        self._add_token(TokenIndentation.EOF, "", 1)
         return self._tokens
