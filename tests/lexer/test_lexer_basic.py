@@ -202,6 +202,36 @@ def test_lexer_integer_literal(int_value: str):
     assert tokens[3].value == int_value
 
 
+@pytest.mark.parametrize("int_value", ["_1000", "__1000"])
+def test_lexer_integer_literal_leading_trailing_underscores(int_value: str):
+    code = f"let x = {int_value}"
+
+    lexer = Lexer(filename="integer_literal_leading_trailing_underscores.sl", lines=[code])
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenIdentifier.IDENTIFIER,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == int_value
+
+
+@pytest.mark.parametrize("int_value", ["1000_", "1000__", "10__00", "1__0__0__0"])
+def test_lexer_integer_literal_failed_trailing_underscores(int_value: str):
+    code = f"let x = {int_value}"
+
+    lexer = Lexer(filename="integer_literal_failed_trailing_underscores.sl", lines=[code])
+    with pytest.raises(SyntaxError) as exc_info:
+        lexer.tokenize()
+    assert "Invalid identifier starting with a digit" in str(exc_info.value)
+
+
 @pytest.mark.parametrize(
     "negative_int_value",
     [
@@ -463,6 +493,250 @@ def test_lexer_lambda():
     ]
     assert [token.type for token in tokens] == expected_types
     assert all(isinstance(token.value, str) for token in tokens)
+
+
+def test_lexer_basic_empty_string_interpolation():
+    code = "let empty = ``"
+
+    lexer = Lexer(filename="empty_string_interpolation.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == ""
+    assert tokens[5].value == "`"
+
+
+def test_lexer_string_interpolation():
+    code = "let greeting = `Hello, {name}! Today is {dayOfWeek}.`"
+
+    lexer = Lexer(filename="string_interpolation.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenIdentifier.IDENTIFIER,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "Hello, {name}! Today is {dayOfWeek}."
+    assert tokens[5].value == "name"
+    assert tokens[6].value == "dayOfWeek"
+    assert tokens[7].value == "`"
+
+
+def test_lexer_string_interpolation_no_identifiers():
+    code = "let message = `Hello, World!`"
+
+    lexer = Lexer(filename="string_interpolation_no_identifiers.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "Hello, World!"
+    assert tokens[5].value == "`"
+
+
+def test_lexer_string_interpolation_only_identifiers():
+    code = "let identifiers = `{var1}{var2}{var3}`"
+
+    lexer = Lexer(filename="string_interpolation_only_identifiers.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenIdentifier.IDENTIFIER,
+        TokenIdentifier.IDENTIFIER,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "{var1}{var2}{var3}"
+    assert tokens[5].value == "var1"
+    assert tokens[6].value == "var2"
+    assert tokens[7].value == "var3"
+    assert tokens[8].value == "`"
+
+
+def test_lexer_string_interpolation_mixed():
+    code = "let mixed = `Value1: -{val1}, Value2: |{val2}, End.`"
+
+    lexer = Lexer(filename="string_interpolation_mixed.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenIdentifier.IDENTIFIER,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "Value1: -{val1}, Value2: |{val2}, End."
+    assert tokens[5].value == "val1"
+    assert tokens[6].value == "val2"
+    assert tokens[7].value == "`"
+
+
+def test_lexer_string_interpolation_escaped_braces():
+    code = r"let escaped = `This is a brace: \{ and this is another: \}`"
+
+    lexer = Lexer(filename="string_interpolation_escaped_braces.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == r"This is a brace: \{ and this is another: \}"
+    assert tokens[5].value == "`"
+
+
+def test_lexer_string_interpolation_unclosed():
+    code = "let unclosed = `This is an unclosed string with {identifier`"
+
+    lexer = Lexer(filename="string_interpolation_unclosed.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "This is an unclosed string with {identifier"
+
+
+def test_lexer_string_interpolation_braces_only():
+    code = "let braces_only = `{}`"
+
+    lexer = Lexer(filename="string_interpolation_braces_only.sl", lines=[code])  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenLiteral.STRING,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[3].value == "`"
+    assert tokens[4].value == "{}"
+    assert tokens[5].value == ""
+    assert tokens[6].value == "`"
+
+
+def test_lexer_class_string():
+    code = """
+    class Str:
+        static concat(str: string) -> string:
+            `{self} {str}`
+    """.strip()
+
+    lexer = Lexer(filename="class_string.sl", lines=code.splitlines())  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.CLASS,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenKeyword.STATIC,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.LPAREN,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.COLON,
+        TokenKeyword.STRING,
+        TokenDelimiter.RPAREN,
+        TokenOperator.ARROW,
+        TokenKeyword.STRING,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenIdentifier.IDENTIFIER,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.BACKSTICK,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.DEDENT,
+        TokenIndentation.DEDENT,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+    assert tokens[18].value == "{self} {str}"
+    assert tokens[19].value == "self"
+    assert tokens[20].value == "str"
 
 
 def test_lexer_basic():

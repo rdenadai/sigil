@@ -1,10 +1,6 @@
-from __future__ import annotations
-
 from typing import Any, List
 
-from src.lexer.token import (
-    Token,
-)
+from src.lexer.token import Token
 
 
 class ParserError(Exception): ...

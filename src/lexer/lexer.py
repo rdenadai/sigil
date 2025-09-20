@@ -12,43 +12,61 @@ from src.lexer.token import (
 
 # Map lexemes to TokenOperator/TokenDelimiter (include longest first-safe set)
 OP_MAP: dict[str, TokenOperator | TokenDelimiter | TokenLiteral] = {
+    "//=": TokenOperator.FLOOR_DIV_EQUAL,
+    "**=": TokenOperator.POWER_EQUAL,
+    "<<=": TokenOperator.SHIFT_LEFT_EQUAL,
+    ">>=": TokenOperator.SHIFT_RIGHT_EQUAL,
+    "++": TokenOperator.INCREMENT,
+    "--": TokenOperator.DECREMENT,
     "**": TokenOperator.POWER,
-    "*": TokenOperator.MULTIPLY,
-    "/": TokenOperator.DIV,
-    "+": TokenOperator.PLUS,
-    "-": TokenOperator.MINUS,
-    "%": TokenOperator.MOD,
+    "//": TokenOperator.FLOOR_DIV,
+    "+=": TokenOperator.PLUS_EQUAL,
+    "-=": TokenOperator.MINUS_EQUAL,
+    "*=": TokenOperator.MULTIPLY_EQUAL,
+    "/=": TokenOperator.DIV_EQUAL,
+    "%=": TokenOperator.MOD_EQUAL,
+    "&=": TokenOperator.AND_EQUAL,
+    "|=": TokenOperator.OR_EQUAL,
+    "^=": TokenOperator.XOR_EQUAL,
     "==": TokenOperator.EQUAL_EQUAL,
     "!=": TokenOperator.NOT_EQUAL,
     "<=": TokenOperator.LESS_EQUAL,
     ">=": TokenOperator.GREATER_EQUAL,
-    "<<": TokenOperator.SHIFT_LEFT,
-    ">>": TokenOperator.SHIFT_RIGHT,
-    "|>": TokenOperator.PIPE,
     "->": TokenOperator.ARROW,
     "=>": TokenOperator.DOUBLE_ARROW,
-    "//": TokenOperator.FLOOR_DIV,
+    "|>": TokenOperator.PIPE,
+    "<<": TokenOperator.SHIFT_LEFT,
+    ">>": TokenOperator.SHIFT_RIGHT,
+    ":=": TokenOperator.WALRUS,
+    "+": TokenOperator.PLUS,
+    "-": TokenOperator.MINUS,
+    "*": TokenOperator.MULTIPLY,
+    "/": TokenOperator.DIV,
+    "%": TokenOperator.MOD,
     "=": TokenOperator.EQUAL,
     "<": TokenOperator.LESS,
     ">": TokenOperator.GREATER,
     "&": TokenOperator.AMPERSAND,
     "|": TokenOperator.BAR,
-    "!": TokenOperator.EXCLAMATION,
-    "~": TokenOperator.TILDE,
     "@": TokenOperator.AT,
     "^": TokenOperator.CARET,
+    "!": TokenOperator.EXCLAMATION,
+    "?": TokenOperator.QUESTION,
+    "~": TokenOperator.TILDE,
     ",": TokenDelimiter.COMMA,
     ";": TokenDelimiter.SEMICOLON,
-    ":": TokenDelimiter.COLON,
     ".": TokenDelimiter.DOT,
+    ":": TokenDelimiter.COLON,
     "(": TokenDelimiter.LPAREN,
     ")": TokenDelimiter.RPAREN,
     "{": TokenDelimiter.LBRACE,
     "}": TokenDelimiter.RBRACE,
     "[": TokenDelimiter.LBRACKET,
     "]": TokenDelimiter.RBRACKET,
+    "`": TokenDelimiter.BACKSTICK,
     "...": TokenLiteral.ELLIPSIS,
 }
+
 
 # Map special keywords (non-ASCII) to TokenKeywordSpecial
 KEYWORD_SPECIAL_MAP: dict[str, TokenKeywordSpecial] = {
@@ -67,18 +85,20 @@ class Lexer:
         self._tokens: list[Token] = []
         self._indent_stack = [0]  # Stack to manage indentation levels
         self._prepare_operator_tables()
-        self._prepare_keyword_special_tables()
-
-    def _prepare_keyword_special_tables(self):
-        """Prepares keyword mapping for quick lookup."""
-        self._keywords_special = list(KEYWORD_SPECIAL_MAP.keys())
-        self._keywords_special.sort(key=len, reverse=True)
+        self._prepare_keyword_tables()
 
     def _prepare_operator_tables(self):
         """Pre-sorts operators for maximal munch matching."""
         self._operators = list(OP_MAP.keys())
         self._operators.sort(key=len, reverse=True)
         self._op_first_chars = {op[0] for op in self._operators}
+
+    def _prepare_keyword_tables(self):
+        """Prepares keyword mapping for quick lookup."""
+        self._keywords_special = list(KEYWORD_SPECIAL_MAP.keys())
+        self._keywords_special.sort(key=len, reverse=True)
+        # Create a set for O(1) lookup
+        self._regular_keywords = {kw.name for kw in TokenKeyword}
 
     def _add_token(self, token_type: TokenType, value: str, column: int):
         """Helper to create and append a token."""
@@ -101,10 +121,10 @@ class Lexer:
     def _is_operator_start(self, ch: str) -> bool:
         return ch in self._op_first_chars
 
-    def _record_regular_keyword(self, lexeme: str) -> TokenKeyword | TokenKeywordSpecial | TokenIdentifier:
+    def _match_regular_keyword(self, lexeme: str) -> TokenKeyword | TokenKeywordSpecial | TokenIdentifier:
         """Records regular keywords and identifiers."""
         w = lexeme.upper()
-        if w in TokenKeyword.__members__:
+        if w in self._regular_keywords:
             return TokenKeyword[w]
         elif lexeme in self._keywords_special:
             return KEYWORD_SPECIAL_MAP[lexeme]
@@ -119,7 +139,7 @@ class Lexer:
                 return op, i + len(op)
         return None
 
-    def _record_special_literal(self, lexeme: str) -> TokenLiteral | None:
+    def _match_special_literal(self, lexeme: str) -> TokenLiteral | None:
         """Records special literals like booleans, None."""
         if lexeme in {"true", "false"}:
             return TokenLiteral.BOOLEAN
@@ -127,14 +147,14 @@ class Lexer:
             return TokenLiteral.NONE
         return None
 
-    def _record_integer_literal(self, lexeme: str) -> TokenLiteral | None:
+    def _match_integer_literal(self, lexeme: str) -> TokenLiteral | None:
         """Records integer literals, allowing underscores for readability."""
         number = lexeme.replace("_", "")
         if number.isdigit():
             return TokenLiteral.INTEGER
         return None
 
-    def _record_float_literal(self, lexeme: str) -> TokenLiteral | None:
+    def _match_float_literal(self, lexeme: str) -> TokenLiteral | None:
         """Records float literals, allowing underscores for readability."""
         number = "".join(lexeme.split("_"))
         if "." in number:
@@ -157,16 +177,20 @@ class Lexer:
                 return TokenLiteral.FLOAT
         return None
 
-    def _record_complex_literal(self, lexeme: str) -> TokenLiteral | None:
+    def _match_complex_literal(self, lexeme: str) -> TokenLiteral | None:
         """Records complex literals, which end with 'i'."""
         if lexeme.endswith("i"):
             number = lexeme[:-1]
-            if self._record_integer_literal(number) is not None or self._record_float_literal(number) is not None:
+            if self._match_integer_literal(number) is not None or self._match_float_literal(number) is not None:
                 return TokenLiteral.COMPLEX
         return None
 
-    def _record_numeric_literal(self, i: int, line: str) -> tuple[TokenLiteral, str, int] | None:
-        """Records numeric literals (integer, float, complex)."""
+    def _match_numeric_literal(self, i: int, line: str) -> tuple[TokenLiteral, str, int] | None:
+        """
+        Records numeric literals (integer, float, complex) in a single pass.
+        The order of checks is important to avoid misclassification.
+        Order: Complex -> Float -> Integer
+        """
         start = i
         L = len(line)
         has_dot, has_e = False, False
@@ -175,7 +199,7 @@ class Lexer:
             ch = line[i]
             if ch.isdigit():
                 i += 1
-            elif ch == "_" and i + 1 < L and line[i + 1].isdigit():
+            elif ch == "_":
                 i += 1
             elif ch == "." and not has_dot and not has_e:
                 # Avoid matching '...' operator
@@ -195,22 +219,26 @@ class Lexer:
                 break
 
         lexeme = line[start:i]
-        if not lexeme:
+        if not lexeme or lexeme == ".":
+            return None
+
+        # Check if we have double underscores or leading/trailing underscores
+        if "__" in lexeme or lexeme.startswith("_") or lexeme.endswith("_"):
             return None
 
         # The order of checks is important to avoid misclassification.
         # A complex number like '3i' could be seen as an integer '3'.
         # A float '3.0' could be seen as an integer '3'.
         # Order: Complex -> Float -> Integer
-        if (token_type := self._record_complex_literal(lexeme)) is not None:
+        if (token_type := self._match_complex_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
-        if (token_type := self._record_float_literal(lexeme)) is not None:
+        if (token_type := self._match_float_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
-        if (token_type := self._record_integer_literal(lexeme)) is not None:
+        if (token_type := self._match_integer_literal(lexeme)) is not None:
             return (token_type, lexeme, i)
         return None
 
-    def _record_string_literal(
+    def _match_string_literal(
         self,
         i: int,
         line: str,
@@ -232,6 +260,43 @@ class Lexer:
                 raise SyntaxError("Unterminated string literal")
         return None
 
+    def _match_string_interpolation(self, i: int, line: str) -> tuple[str, int] | None:
+        """Records string interpolation segments."""
+        if line[i] == "`" and i + 1 < len(line):
+            if line[i + 1] == "`":
+                return "", i + 2  # Handle empty interpolation ``
+            start = i + 1  # Skip opening `
+            i += 2
+            L = len(line)
+            while i < L:
+                if line[i] == "\\" and i + 1 < L:
+                    i += 2  # Skip escaped character
+                elif line[i] == "`":
+                    return line[start:i], i + 1  # Include closing `
+                else:
+                    i += 1
+            else:
+                raise SyntaxError("Unterminated string interpolation")
+        return None
+
+    def _match_string_interpolation_internals(self, lexeme: str) -> list[tuple[str, int]]:
+        # Handle cases like: Hello, {name}! => STRING, COMMA, IDENTIFIER, STRING
+        column, i, L = 0, 0, len(lexeme)
+        lbrace_start, rbrace_start, open_bracket = 0, 0, False
+        identifiers: list[tuple[str, int]] = []
+        while i < L:
+            if lexeme[i] == "{" and (i == 0 or lexeme[i - 1] != "\\"):
+                lbrace_start = i
+                open_bracket = True
+            elif lexeme[i] == "}" and (i == 0 or lexeme[i - 1] != "\\") and open_bracket:
+                rbrace_start = i
+                token = lexeme[lbrace_start + 1 : rbrace_start].strip()
+                identifiers.append((token, column))
+                column = i
+                lbrace_start, rbrace_start, open_bracket = 0, 0, False
+            i += 1
+        return identifiers
+
     def _tokenize_line(self, line: str, leading_spaces: int):
         """Tokenizes a single line of code."""
         i, L = 0, len(line)
@@ -247,8 +312,35 @@ class Lexer:
                 i += 1
                 continue
 
+            # String Interpolation
+            string_interp_result = self._match_string_interpolation(i, line)
+            if string_interp_result is not None:
+                lexeme, new_i = string_interp_result
+                self._add_token(TokenDelimiter.BACKSTICK, "`", leading_spaces + i)
+                if lexeme:
+                    # Find identifiers inside {}
+                    tokens = self._match_string_interpolation_internals(lexeme)
+                    if tokens:
+                        self._add_token(TokenLiteral.STRING_TEMPLATE, lexeme, leading_spaces + new_i + 1)
+                        for token, space in tokens:
+                            # We have something like {} in the string
+                            if not token:
+                                self._add_token(TokenLiteral.STRING, "", leading_spaces + space + 1)
+                            else:
+                                # We have an identifier or expression inside {}
+                                self._add_token(TokenIdentifier.IDENTIFIER, token, leading_spaces + space + 1)
+                    # We have a plain string without {}
+                    else:
+                        self._add_token(TokenLiteral.STRING, lexeme, leading_spaces + new_i + 1)
+                # We have an empty interpolation ``
+                else:
+                    self._add_token(TokenLiteral.STRING, "", leading_spaces + i + 1)
+                self._add_token(TokenDelimiter.BACKSTICK, "`", leading_spaces + new_i - 2)
+                i = new_i
+                continue
+
             # String Literals
-            string_literal_result = self._record_string_literal(i, line)
+            string_literal_result = self._match_string_literal(i, line)
             if string_literal_result is not None:
                 lexeme, new_i = string_literal_result
                 self._add_token(TokenLiteral.STRING, lexeme, leading_spaces + i)
@@ -257,7 +349,7 @@ class Lexer:
 
             # Numeric Literals
             if ch.isdigit() or (ch == "." and i + 1 < L and line[i + 1].isdigit()):
-                num_result = self._record_numeric_literal(i, line)
+                num_result = self._match_numeric_literal(i, line)
                 if num_result:
                     token_type, lexeme, new_i = num_result
                     self._add_token(token_type, lexeme, leading_spaces + i)
@@ -273,12 +365,16 @@ class Lexer:
 
                 column = leading_spaces + i - len(lexeme)
 
-                token_type = self._record_special_literal(lexeme)
+                token_type = self._match_special_literal(lexeme)
                 if token_type is not None:
                     self._add_token(token_type, lexeme, column)
                     continue
 
-                token_type = self._record_regular_keyword(lexeme)
+                if lexeme and lexeme[0].isdigit():
+                    raise SyntaxError(
+                        f"Invalid identifier starting with a digit: '{lexeme}' at {self._filename}:{self._line_number}:{column + 1}"
+                    )
+                token_type = self._match_regular_keyword(lexeme)
                 self._add_token(token_type, lexeme, column)
                 continue
 
