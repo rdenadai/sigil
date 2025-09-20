@@ -11,6 +11,7 @@ class TokenIdentifier(TokenType):
 
 class TokenKeyword(TokenType):
     BYTE = "BYTE"
+    INT8 = "INT8"
     INT32 = "INT32"
     INT64 = "INT64"
     FLOAT32 = "FLOAT32"
@@ -35,8 +36,8 @@ class TokenKeyword(TokenType):
     IMPORT = "IMPORT"
     FROM = "FROM"
     AS = "AS"
-    FN = "FN"
     DELETE = "DELETE"
+    FN = "FN"
     FUNCTION = "FUNCTION"
     LAMBDA = "LAMBDA"
     LET = "LET"
@@ -92,6 +93,7 @@ class TokenDelimiter(TokenType):
     RBRACE = "}"
     LBRACKET = "["
     RBRACKET = "]"
+    BACKSTICK = "`"
 
 
 class TokenOperator(TokenType):
@@ -101,6 +103,8 @@ class TokenOperator(TokenType):
     DIV = "/"
     FLOOR_DIV = "//"
     POWER = "**"
+    INCREMENT = "++"
+    DECREMENT = "--"
     MOD = "%"
     EQUAL = "="
     EQUAL_EQUAL = "=="
@@ -111,15 +115,29 @@ class TokenOperator(TokenType):
     GREATER_EQUAL = ">="
     ARROW = "->"
     DOUBLE_ARROW = "=>"
+    WALRUS = ":="
     PIPE = "|>"
     AMPERSAND = "&"
     BAR = "|"
     AT = "@"
     CARET = "^"
     EXCLAMATION = "!"
+    QUESTION = "?"
     TILDE = "~"
     SHIFT_LEFT = "<<"
     SHIFT_RIGHT = ">>"
+    FLOOR_DIV_EQUAL = "//="
+    POWER_EQUAL = "**="
+    MULTIPLY_EQUAL = "*="
+    DIV_EQUAL = "/="
+    MOD_EQUAL = "%="
+    PLUS_EQUAL = "+="
+    MINUS_EQUAL = "-="
+    AND_EQUAL = "&="
+    OR_EQUAL = "|="
+    XOR_EQUAL = "^="
+    SHIFT_LEFT_EQUAL = "<<="
+    SHIFT_RIGHT_EQUAL = ">>="
 
 
 class TokenLiteral(TokenType):
@@ -131,6 +149,7 @@ class TokenLiteral(TokenType):
     STRING = "STRING"
     NONE = "NONE"
     ELLIPSIS = "ELLIPSIS"
+    STRING_TEMPLATE = "STRING_TEMPLATE"
 
 
 class TokenComment(TokenType):
