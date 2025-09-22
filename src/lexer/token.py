@@ -9,7 +9,7 @@ class TokenIdentifier(TokenType):
     IDENTIFIER = "IDENTIFIER"
 
 
-class TokenKeyword(TokenType):
+class TokenAnnotationTypes(TokenType):
     BYTE = "BYTE"
     INT8 = "INT8"
     INT32 = "INT32"
@@ -23,6 +23,9 @@ class TokenKeyword(TokenType):
     CALLABLE = "CALLABLE"
     OBJECT = "OBJECT"
     NONE = "NONE"
+
+
+class TokenKeyword(TokenType):
     CLASS = "CLASS"
     ENUM = "ENUM"
     STRUCT = "STRUCT"
@@ -37,7 +40,7 @@ class TokenKeyword(TokenType):
     FROM = "FROM"
     AS = "AS"
     DELETE = "DELETE"
-    FN = "FN"
+    FN = "FUNCTION"
     FUNCTION = "FUNCTION"
     LAMBDA = "LAMBDA"
     LET = "LET"
@@ -100,7 +103,7 @@ class TokenOperator(TokenType):
     PLUS = "+"
     MINUS = "-"
     MULTIPLY = "*"
-    DIV = "/"
+    DIVIDE = "/"
     FLOOR_DIV = "//"
     POWER = "**"
     INCREMENT = "++"

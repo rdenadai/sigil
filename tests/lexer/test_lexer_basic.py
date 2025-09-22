@@ -4,6 +4,7 @@ import pytest
 
 from src.lexer.lexer import Lexer
 from src.lexer.token import (
+    TokenAnnotationTypes,
     TokenDelimiter,
     TokenIdentifier,
     TokenIndentation,
@@ -58,7 +59,7 @@ def test_lexer_single_line():
         TokenKeyword.CONST,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.INT32,
+        TokenAnnotationTypes.INT32,
         TokenOperator.EQUAL,
         TokenLiteral.INTEGER,
         TokenIndentation.NEWLINE,
@@ -91,7 +92,7 @@ def test_lexer_none_literal(none_keyword: str, none_case: str):
         TokenKeyword.CONST,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.NONE,
+        TokenAnnotationTypes.NONE,
         TokenOperator.EQUAL,
         TokenLiteral.NONE,
         TokenIndentation.NEWLINE,
@@ -122,7 +123,7 @@ def test_lexer_ellipsis_literal(ellipsis_keyword: str, ellipsis_case: str):
         TokenKeyword.CONST,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.ELLIPSIS,
+        TokenAnnotationTypes.ELLIPSIS,
         TokenOperator.EQUAL,
         TokenLiteral.ELLIPSIS,
         TokenIndentation.NEWLINE,
@@ -143,7 +144,7 @@ def test_lexer_boolean_literal(bool_value: str):
         TokenKeyword.CONST,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.BOOL,
+        TokenAnnotationTypes.BOOL,
         TokenOperator.EQUAL,
         TokenLiteral.BOOLEAN,
         TokenIndentation.NEWLINE,
@@ -227,9 +228,15 @@ def test_lexer_integer_literal_failed_trailing_underscores(int_value: str):
     code = f"let x = {int_value}"
 
     lexer = Lexer(filename="integer_literal_failed_trailing_underscores.sl", lines=[code])
-    with pytest.raises(SyntaxError) as exc_info:
+    with pytest.raises(ExceptionGroup) as excinfo:
         lexer.tokenize()
-    assert "Invalid identifier starting with a digit" in str(exc_info.value)
+    assert any(isinstance(e, SyntaxError) for e in excinfo.value.exceptions)
+    assert str(excinfo.value).startswith("Lexing errors occurred")
+    assert any(
+        f"Invalid identifier starting with a digit: '{int_value}' at integer_literal_failed_trailing_underscores.sl:1:9"
+        in str(e)
+        for e in excinfo.value.exceptions
+    )
 
 
 @pytest.mark.parametrize(
@@ -472,18 +479,18 @@ def test_lexer_lambda():
         TokenKeyword.LET,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.CALLABLE,
+        TokenAnnotationTypes.CALLABLE,
         TokenOperator.EQUAL,
         TokenKeyword.LAMBDA,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.INT32,
+        TokenAnnotationTypes.INT32,
         TokenDelimiter.COMMA,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.INT32,
+        TokenAnnotationTypes.INT32,
         TokenOperator.ARROW,
-        TokenKeyword.INT32,
+        TokenAnnotationTypes.INT32,
         TokenDelimiter.COLON,
         TokenIdentifier.IDENTIFIER,
         TokenOperator.PLUS,
@@ -715,10 +722,10 @@ def test_lexer_class_string():
         TokenDelimiter.LPAREN,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.STRING,
+        TokenAnnotationTypes.STRING,
         TokenDelimiter.RPAREN,
         TokenOperator.ARROW,
-        TokenKeyword.STRING,
+        TokenAnnotationTypes.STRING,
         TokenDelimiter.COLON,
         TokenIndentation.NEWLINE,
         TokenIndentation.INDENT,
@@ -737,6 +744,129 @@ def test_lexer_class_string():
     assert tokens[18].value == "{self} {str}"
     assert tokens[19].value == "self"
     assert tokens[20].value == "str"
+
+
+def test_lexer_basic_and_else():
+    code = """
+    fn main():
+        let x = 10
+        if x > 5 and x < 15:
+            print('x is between 5 and 15')
+        else:
+            print('x is not between 5 and 15')
+    """.strip()
+
+    lexer = Lexer(filename="basic_and_else.sl", lines=code.splitlines())  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.FN,
+        TokenKeyword.MAIN,
+        TokenDelimiter.LPAREN,
+        TokenDelimiter.RPAREN,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenLiteral.INTEGER,
+        TokenIndentation.NEWLINE,
+        TokenKeyword.IF,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.GREATER,
+        TokenLiteral.INTEGER,
+        TokenKeyword.AND,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.LESS,
+        TokenLiteral.INTEGER,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.LPAREN,
+        TokenLiteral.STRING,
+        TokenDelimiter.RPAREN,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.DEDENT,
+        TokenKeyword.ELSE,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.LPAREN,
+        TokenLiteral.STRING,
+        TokenDelimiter.RPAREN,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.DEDENT,
+        TokenIndentation.DEDENT,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
+
+
+def test_lexer_basic_and_or_not():
+    code = """
+    fn main():
+        let x = 10
+        if not (x < 5 or x > 15):
+            print('x is between 5 and 15')
+        else:
+            print('x is not between 5 and 15')
+    """.strip()
+
+    lexer = Lexer(filename="basic_and_or_not.sl", lines=code.splitlines())  # type: ignore
+    tokens = lexer.tokenize()
+
+    expected_types: list[Any] = [
+        TokenKeyword.FN,
+        TokenKeyword.MAIN,
+        TokenDelimiter.LPAREN,
+        TokenDelimiter.RPAREN,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenKeyword.LET,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.EQUAL,
+        TokenLiteral.INTEGER,
+        TokenIndentation.NEWLINE,
+        TokenKeyword.IF,
+        TokenKeyword.NOT,
+        TokenDelimiter.LPAREN,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.LESS,
+        TokenLiteral.INTEGER,
+        TokenKeyword.OR,
+        TokenIdentifier.IDENTIFIER,
+        TokenOperator.GREATER,
+        TokenLiteral.INTEGER,
+        TokenDelimiter.RPAREN,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.LPAREN,
+        TokenLiteral.STRING,
+        TokenDelimiter.RPAREN,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.DEDENT,
+        TokenKeyword.ELSE,
+        TokenDelimiter.COLON,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.INDENT,
+        TokenIdentifier.IDENTIFIER,
+        TokenDelimiter.LPAREN,
+        TokenLiteral.STRING,
+        TokenDelimiter.RPAREN,
+        TokenIndentation.NEWLINE,
+        TokenIndentation.DEDENT,
+        TokenIndentation.DEDENT,
+        TokenIndentation.EOF,
+    ]
+    assert [token.type for token in tokens] == expected_types
+    assert all(isinstance(token.value, str) for token in tokens)
 
 
 def test_lexer_basic():
@@ -769,7 +899,7 @@ def test_lexer_basic():
         TokenKeyword.CONST,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
-        TokenKeyword.INT32,
+        TokenAnnotationTypes.INT32,
         TokenOperator.EQUAL,
         TokenLiteral.INTEGER,
         TokenIndentation.NEWLINE,
