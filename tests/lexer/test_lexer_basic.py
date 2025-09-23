@@ -2,8 +2,8 @@ from typing import Any
 
 import pytest
 
-from src.lexer.lexer import Lexer
-from src.lexer.token import (
+from src.lexer import (
+    Lexer,
     TokenAnnotationTypes,
     TokenDelimiter,
     TokenIdentifier,
