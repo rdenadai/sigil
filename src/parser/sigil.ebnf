@@ -1,0 +1,105 @@
+number_type
+    = int8
+    | int32
+    | int64
+    | float32
+    | float64
+    | complex;
+
+extra_type
+    = ellipsis
+    | none;
+
+type
+    = byte
+    | bool
+    | string
+    | extra_type
+    | number_type
+    | identifier;
+
+indentation
+    = newline
+    | indent
+    | dedent
+    | eof;
+
+paren_expression
+    = lparenexpression, rparen;
+
+func_param_group
+    = { identifier, [ colon, ( type ), comma ] };
+
+func_return
+    = [ arrow, ( type ) ];
+
+var_definition
+    = let
+    | const;
+
+program
+    = main_expression;
+
+statement
+    = assignment
+    | expression
+    | conditional
+    | loop
+    | func_expression
+    | eof;
+
+if_statement
+    = if, expression, colon, indentation, { statement }, dedent;
+
+else_if_statement
+    = else_if, expression, colon, indentation, { statement }, dedent;
+
+else_statement
+    = else, colon, indentation, { statement }, dedent;
+
+conditional
+    = if_statement, { else_if_statement }, [ else_statement ];
+
+loop_statement
+    = loop, [ expression ], colon, indentation, { statement }, dedent;
+
+for_in_statement
+    = for, identifier, in, expression, colon, indentation, { statement }, dedent;
+
+loop
+    = loop_statement
+    | for_in_statement;
+
+main_expression
+    = main, lparen, rparen, colon, indentation, { statement }, dedent;
+
+func_expression
+    = function, lparen, func_param_group, rparen, func_return, newline;
+
+assignment
+    = var_definition, identifier, [ colon, type ], equal, expression;
+
+expression
+    = term, { ( plus
+    | minus ), term }
+    | term, and, term
+    | term, or, term
+    | not, term
+    | term, ( equal_equal
+    | not_equal
+    | less_than
+    | less_equal
+    | greater_than
+    | greater_equal ), term;
+
+term
+    = factor, { ( multiply
+    | divide
+    | floor_div
+    | power
+    | mod ), factor };
+
+factor
+    = number_type
+    | identifier
+    | paren_expression;
