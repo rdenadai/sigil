@@ -12,7 +12,7 @@ from src.parser import Parser
 BUILD_DIR = Path("build")
 
 
-def run_command(command: list[str], capture_output=False):
+def run_command(command: list[str], capture_output: bool = False):
     """Runs a shell command and handles errors."""
     print(f"Running command: {' '.join(command)}")
     try:
