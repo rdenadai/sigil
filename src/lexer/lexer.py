@@ -1,5 +1,6 @@
 from src.lexer.token import (
     Token,
+    TokenAnnotationTypes,
     TokenDelimiter,
     TokenIdentifier,
     TokenIndentation,
@@ -41,7 +42,7 @@ OP_MAP: dict[str, TokenOperator | TokenDelimiter | TokenLiteral] = {
     "+": TokenOperator.PLUS,
     "-": TokenOperator.MINUS,
     "*": TokenOperator.MULTIPLY,
-    "/": TokenOperator.DIV,
+    "/": TokenOperator.DIVIDE,
     "%": TokenOperator.MOD,
     "=": TokenOperator.EQUAL,
     "<": TokenOperator.LESS,
@@ -84,6 +85,7 @@ class Lexer:
         self._line_number = 0
         self._tokens: list[Token] = []
         self._indent_stack = [0]  # Stack to manage indentation levels
+        self._errors: list[Exception] = []
         self._prepare_operator_tables()
         self._prepare_keyword_tables()
 
@@ -99,6 +101,7 @@ class Lexer:
         self._keywords_special.sort(key=len, reverse=True)
         # Create a set for O(1) lookup
         self._regular_keywords = {kw.name for kw in TokenKeyword}
+        self._annotation_types = {at.name for at in TokenAnnotationTypes}
 
     def _add_token(self, token_type: TokenType, value: str, column: int):
         """Helper to create and append a token."""
@@ -121,11 +124,15 @@ class Lexer:
     def _is_operator_start(self, ch: str) -> bool:
         return ch in self._op_first_chars
 
-    def _match_regular_keyword(self, lexeme: str) -> TokenKeyword | TokenKeywordSpecial | TokenIdentifier:
+    def _match_regular_keyword(
+        self, lexeme: str
+    ) -> TokenKeyword | TokenKeywordSpecial | TokenIdentifier | TokenAnnotationTypes:
         """Records regular keywords and identifiers."""
         w = lexeme.upper()
         if w in self._regular_keywords:
             return TokenKeyword[w]
+        elif w in self._annotation_types:
+            return TokenAnnotationTypes[w]
         elif lexeme in self._keywords_special:
             return KEYWORD_SPECIAL_MAP[lexeme]
         return TokenIdentifier.IDENTIFIER
@@ -257,7 +264,7 @@ class Lexer:
                 else:
                     i += 1
             else:
-                raise SyntaxError("Unterminated string literal")
+                self._errors.append(SyntaxError("Unterminated string literal"))
         return None
 
     def _match_string_interpolation(self, i: int, line: str) -> tuple[str, int] | None:
@@ -276,7 +283,7 @@ class Lexer:
                 else:
                     i += 1
             else:
-                raise SyntaxError("Unterminated string interpolation")
+                self._errors.append(SyntaxError("Unterminated string interpolation"))
         return None
 
     def _match_string_interpolation_internals(self, lexeme: str) -> list[tuple[str, int]]:
@@ -371,8 +378,10 @@ class Lexer:
                     continue
 
                 if lexeme and lexeme[0].isdigit():
-                    raise SyntaxError(
-                        f"Invalid identifier starting with a digit: '{lexeme}' at {self._filename}:{self._line_number}:{column + 1}"
+                    self._errors.append(
+                        SyntaxError(
+                            f"Invalid identifier starting with a digit: '{lexeme}' at {self._filename}:{self._line_number}:{column + 1}"
+                        )
                     )
                 token_type = self._match_regular_keyword(lexeme)
                 self._add_token(token_type, lexeme, column)
@@ -387,9 +396,12 @@ class Lexer:
                 continue
 
             # If we reach here, it's an unknown character
-            raise SyntaxError(
-                f"Unknown character: '{ch}' at {self._filename}:{self._line_number}:{leading_spaces + i + 1}"
+            self._errors.append(
+                SyntaxError(
+                    f"Unknown character: '{ch}' at {self._filename}:{self._line_number}:{leading_spaces + i + 1}"
+                )
             )
+            i += 1
 
     def tokenize(self):
         """Tokenizes the input lines into a list of tokens."""
@@ -399,7 +411,7 @@ class Lexer:
 
             # Tabs are not allowed anywhere on the line
             if "\t" in line:
-                raise IndentationError(f"Tabs are not allowed. (line {line_number})")
+                self._errors.append(IndentationError(f"Tabs are not allowed. (line {line_number})"))
 
             # Find first non-space character
             i = 0
@@ -422,7 +434,9 @@ class Lexer:
                 self._add_token(TokenIndentation.DEDENT, "", 1)
 
             if leading_spaces != self._indent_stack[-1]:
-                raise IndentationError(f"Unindent does not match any outer indentation level. (line {line_number})")
+                self._errors.append(
+                    IndentationError(f"Unindent does not match any outer indentation level. (line {line_number})")
+                )
 
             # Tokenize the actual line content (without leading indentation)
             content = line[leading_spaces:]
@@ -435,4 +449,8 @@ class Lexer:
             self._add_token(TokenIndentation.DEDENT, "", 1)
 
         self._add_token(TokenIndentation.EOF, "", 1)
+
+        if self._errors:
+            raise ExceptionGroup("Lexing errors occurred", self._errors)
+
         return self._tokens
