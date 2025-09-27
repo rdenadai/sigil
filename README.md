@@ -26,23 +26,51 @@ To build and run Sigil, you need the following dependencies installed on your sy
 
 The Sigil compiler is built with a modular architecture, following a classic multi-stage compilation pipeline. The entire frontend is written in Python.
 
-```mermaid
-graph TD
-    subgraph "Frontend (Python)"
-        A[Source Code (.sl)] --> B{Lexer};
-        B -- Tokens --> C{Parser};
-        C -- AST --> D{Semantic Analyzer};
-        D -- Validated AST --> E{Code Generator};
-    end
-
-    subgraph "Backend (LLVM Toolchain)"
-        E -- LLVM IR --> F[LLVM IR (.ll)];
-        F --> G{opt (Optional)};
-        G -- Optimized IR --> H{llc};
-        F --> H{llc};
-        H -- Object File (.o) --> I{gcc};
-        I -- Executable --> J[Executable];
-    end
+```
++-----------------------------------+
+|      Frontend (Python)            |
++-----------------------------------+
+|                                   |
+|      Source Code (.sl)            |
+|           |                       |
+|           v                       |
+|         Lexer --(Tokens)-->       |
+|           |                       |
+|           v                       |
+|         Parser --(AST)-->         |
+|           |                       |
+|           v                       |
+|   Semantic Analyzer --(Valid )--> |
+|           |                       |
+|           v                       |
+|     Code Generator                |
+|           | (LLVM IR)             |
+|           v                       |
++-----------------------------------+
+              |
+              v
++-------------------------------------+
+|    Backend (LLVM Toolchain)         |
++-------------------------------------+
+|                                     |
+|       LLVM IR (.ll)                 |
+|           |                         |
+|     +-----+------+                  |
+|     |            |                  |
+|     v            v                  |
+| opt (Optional)   llc                |
+|     |            ^                  |
+| (Optimized IR)   |                  |
+|     |            |                  |
+|     +------>-----+                  |
+|                  | (Object File .o) |
+|                  v                  |
+|                 gcc                 |
+|                  | (Executable)     |
+|                  v                  |
+|             Executable              |
+|                                     |
++-------------------------------------+
 ```
 
 1.  **Lexical Analysis (`Lexer`)**: The source code is first processed by the lexer, which scans the text and converts it into a stream of tokens. This stage handles indentation, comments, and the basic elements of the language like keywords, identifiers, and operators.
