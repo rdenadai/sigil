@@ -286,25 +286,37 @@ class Lexer:
                 self._errors.append(SyntaxError("Unterminated string interpolation"))
         return None
 
-    def _match_string_interpolation_internals(self, lexeme: str) -> list[tuple[str, int]]:
+    def _match_string_interpolation_internals(self, lexeme: str) -> list[tuple[str, int, bool]]:
         # Handle cases like: Hello, {name}! => STRING, COMMA, IDENTIFIER, STRING
         column, i, L = 0, 0, len(lexeme)
         lbrace_start, rbrace_start, open_bracket = 0, 0, False
-        identifiers: list[tuple[str, int]] = []
+        identifiers: list[tuple[str, int, bool]] = []
+        string: list[str] = []
         while i < L:
-            if lexeme[i] == "{" and (i == 0 or lexeme[i - 1] != "\\"):
+            w = lexeme[i]
+            if w == "{" and (i == 0 or lexeme[i - 1] != "\\"):
                 lbrace_start = i
                 open_bracket = True
-            elif lexeme[i] == "}" and (i == 0 or lexeme[i - 1] != "\\") and open_bracket:
+                if string:
+                    identifiers.append(("".join(string), column, True))
+                    string = []
+            elif not open_bracket:
+                string.append(w)
+            elif w == "}" and (i == 0 or lexeme[i - 1] != "\\") and open_bracket:
                 rbrace_start = i
                 token = lexeme[lbrace_start + 1 : rbrace_start].strip()
-                identifiers.append((token, column))
+                identifiers.append((token, column, False))
                 column = i
                 lbrace_start, rbrace_start, open_bracket = 0, 0, False
             i += 1
+        if string or open_bracket:
+            # Handle unclosed {
+            if open_bracket and lbrace_start > 0:
+                string.append(lexeme[lbrace_start:])
+            identifiers.append(("".join(string), column, True))
         return identifiers
 
-    def _tokenize_line(self, line: str, leading_spaces: int):
+    def _tokenize_line(self, line: str, leading_spaces: int) -> None:
         """Tokenizes a single line of code."""
         i, L = 0, len(line)
         while i < L:
@@ -324,18 +336,22 @@ class Lexer:
             if string_interp_result is not None:
                 lexeme, new_i = string_interp_result
                 self._add_token(TokenDelimiter.BACKSTICK, "`", leading_spaces + i)
+                self._add_token(TokenLiteral.STRING_TEMPLATE, lexeme, leading_spaces + new_i + 1)
                 if lexeme:
                     # Find identifiers inside {}
                     tokens = self._match_string_interpolation_internals(lexeme)
                     if tokens:
-                        self._add_token(TokenLiteral.STRING_TEMPLATE, lexeme, leading_spaces + new_i + 1)
-                        for token, space in tokens:
+                        for token, space, is_raw_string in tokens:
                             # We have something like {} in the string
                             if not token:
                                 self._add_token(TokenLiteral.STRING, "", leading_spaces + space + 1)
                             else:
-                                # We have an identifier or expression inside {}
-                                self._add_token(TokenIdentifier.IDENTIFIER, token, leading_spaces + space + 1)
+                                if is_raw_string:
+                                    # We have a raw string inside {}
+                                    self._add_token(TokenLiteral.STRING, token, leading_spaces + space + 1)
+                                else:
+                                    # We have an identifier or expression inside {}
+                                    self._tokenize_line(token, leading_spaces + space + 1)
                     # We have a plain string without {}
                     else:
                         self._add_token(TokenLiteral.STRING, lexeme, leading_spaces + new_i + 1)
@@ -420,6 +436,7 @@ class Lexer:
 
             # Skip blank lines and comment-only lines
             if i >= len(line) or (i < len(line) and line[i] == "#"):
+                self._add_token(TokenIndentation.NEWLINE, "\n", len(line) + 1)
                 continue
 
             leading_spaces = i

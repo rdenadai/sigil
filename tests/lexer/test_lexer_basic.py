@@ -18,9 +18,9 @@ from src.lexer import (
 def test_lexer_empty():
     lexer = Lexer(filename="empty.sl", lines=[""])
     tokens = lexer.tokenize()
-    assert len(tokens) == 1  # Only EOF
-    assert [token.type for token in tokens] == [TokenIndentation.EOF]
-    assert tokens[0].value == ""
+    assert len(tokens) == 2  # Only EOF
+    assert [token.type for token in tokens] == [TokenIndentation.NEWLINE, TokenIndentation.EOF]
+    assert tokens[0].value == "\n"
 
 
 def test_lexer_whitespace():
@@ -31,9 +31,9 @@ def test_lexer_whitespace():
 
     lexer = Lexer(filename="whitespace.sl", lines=[code])
     tokens = lexer.tokenize()
-    assert len(tokens) == 1  # Only EOF
-    assert [token.type for token in tokens] == [TokenIndentation.EOF]
-    assert tokens[0].value == ""
+    assert len(tokens) == 2  # Only EOF
+    assert [token.type for token in tokens] == [TokenIndentation.NEWLINE, TokenIndentation.EOF]
+    assert tokens[0].value == "\n"
 
 
 def test_lexer_comment():
@@ -44,9 +44,9 @@ def test_lexer_comment():
 
     lexer = Lexer(filename="comment.sl", lines=[code])
     tokens = lexer.tokenize()
-    assert len(tokens) == 1  # Only EOF
-    assert [token.type for token in tokens] == [TokenIndentation.EOF]
-    assert tokens[0].value == ""
+    assert len(tokens) == 2  # Only EOF
+    assert [token.type for token in tokens] == [TokenIndentation.NEWLINE, TokenIndentation.EOF]
+    assert tokens[0].value == "\n"
 
 
 def test_lexer_single_line():
@@ -513,6 +513,7 @@ def test_lexer_basic_empty_string_interpolation():
         TokenIdentifier.IDENTIFIER,
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
         TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
@@ -522,7 +523,8 @@ def test_lexer_basic_empty_string_interpolation():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == ""
-    assert tokens[5].value == "`"
+    assert tokens[5].value == ""
+    assert tokens[6].value == "`"
 
 
 def test_lexer_string_interpolation():
@@ -537,8 +539,11 @@ def test_lexer_string_interpolation():
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
         TokenLiteral.STRING_TEMPLATE,
+        TokenLiteral.STRING,
         TokenIdentifier.IDENTIFIER,
+        TokenLiteral.STRING,
         TokenIdentifier.IDENTIFIER,
+        TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
         TokenIndentation.EOF,
@@ -547,9 +552,11 @@ def test_lexer_string_interpolation():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == "Hello, {name}! Today is {dayOfWeek}."
-    assert tokens[5].value == "name"
-    assert tokens[6].value == "dayOfWeek"
-    assert tokens[7].value == "`"
+    assert tokens[5].value == "Hello, "
+    assert tokens[6].value == "name"
+    assert tokens[7].value == "! Today is "
+    assert tokens[8].value == "dayOfWeek"
+    assert tokens[9].value == "."
 
 
 def test_lexer_string_interpolation_no_identifiers():
@@ -563,6 +570,7 @@ def test_lexer_string_interpolation_no_identifiers():
         TokenIdentifier.IDENTIFIER,
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
         TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
@@ -572,7 +580,8 @@ def test_lexer_string_interpolation_no_identifiers():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == "Hello, World!"
-    assert tokens[5].value == "`"
+    assert tokens[5].value == "Hello, World!"
+    assert tokens[6].value == "`"
 
 
 def test_lexer_string_interpolation_only_identifiers():
@@ -616,8 +625,11 @@ def test_lexer_string_interpolation_mixed():
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
         TokenLiteral.STRING_TEMPLATE,
+        TokenLiteral.STRING,
         TokenIdentifier.IDENTIFIER,
+        TokenLiteral.STRING,
         TokenIdentifier.IDENTIFIER,
+        TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
         TokenIndentation.EOF,
@@ -626,9 +638,12 @@ def test_lexer_string_interpolation_mixed():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == "Value1: -{val1}, Value2: |{val2}, End."
-    assert tokens[5].value == "val1"
-    assert tokens[6].value == "val2"
-    assert tokens[7].value == "`"
+    assert tokens[5].value == "Value1: -"
+    assert tokens[6].value == "val1"
+    assert tokens[7].value == ", Value2: |"
+    assert tokens[8].value == "val2"
+    assert tokens[9].value == ", End."
+    assert tokens[10].value == "`"
 
 
 def test_lexer_string_interpolation_escaped_braces():
@@ -642,6 +657,7 @@ def test_lexer_string_interpolation_escaped_braces():
         TokenIdentifier.IDENTIFIER,
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
         TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
@@ -651,7 +667,8 @@ def test_lexer_string_interpolation_escaped_braces():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == r"This is a brace: \{ and this is another: \}"
-    assert tokens[5].value == "`"
+    assert tokens[5].value == r"This is a brace: \{ and this is another: \}"
+    assert tokens[6].value == "`"
 
 
 def test_lexer_string_interpolation_unclosed():
@@ -665,15 +682,20 @@ def test_lexer_string_interpolation_unclosed():
         TokenIdentifier.IDENTIFIER,
         TokenOperator.EQUAL,
         TokenDelimiter.BACKSTICK,
+        TokenLiteral.STRING_TEMPLATE,
+        TokenLiteral.STRING,
         TokenLiteral.STRING,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
         TokenIndentation.EOF,
     ]
     assert [token.type for token in tokens] == expected_types
-    assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[3].value == "`"
     assert tokens[4].value == "This is an unclosed string with {identifier"
+    assert tokens[5].value == "This is an unclosed string with "
+    assert tokens[6].value == "{identifier"
+    assert tokens[7].value == "`"
+    assert all(isinstance(token.value, str) for token in tokens)
 
 
 def test_lexer_string_interpolation_braces_only():
@@ -711,7 +733,7 @@ def test_lexer_class_string():
     lexer = Lexer(filename="class_string.sl", lines=code.splitlines())  # type: ignore
     tokens = lexer.tokenize()
 
-    expected_types: list[Any] = [
+    expected_types: list[Token] = [
         TokenKeyword.CLASS,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.COLON,
@@ -731,7 +753,8 @@ def test_lexer_class_string():
         TokenIndentation.INDENT,
         TokenDelimiter.BACKSTICK,
         TokenLiteral.STRING_TEMPLATE,
-        TokenIdentifier.IDENTIFIER,
+        TokenKeyword.SELF,
+        TokenLiteral.STRING,
         TokenIdentifier.IDENTIFIER,
         TokenDelimiter.BACKSTICK,
         TokenIndentation.NEWLINE,
@@ -743,7 +766,8 @@ def test_lexer_class_string():
     assert all(isinstance(token.value, str) for token in tokens)
     assert tokens[18].value == "{self} {str}"
     assert tokens[19].value == "self"
-    assert tokens[20].value == "str"
+    assert tokens[20].value == " "
+    assert tokens[21].value == "str"
 
 
 def test_lexer_basic_and_else():

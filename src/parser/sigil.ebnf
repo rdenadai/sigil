@@ -1,0 +1,168 @@
+number_type
+    = int8
+    | int32
+    | int64
+    | float32
+    | float64
+    | complex;
+
+extra_type
+    = ellipsis
+    | none;
+
+type
+    = byte
+    | bool
+    | string
+    | extra_type
+    | number_type
+    | identifier;
+
+indentation
+    = newline
+    | indent
+    | dedent
+    | eof;
+
+paren_expression
+    = lparen, expression, rparen;
+
+func_param_group
+    = [ param, { comma, param } ];
+
+param
+    = identifier, [ colon, type ];
+
+func_return
+    = [ arrow, type ];
+
+var_definition
+    = let
+    | const;
+
+program
+    = { statement };
+
+statement
+    = assignment
+    | expression
+    | conditional_statement
+    | all_loop_statement
+    | func_statement
+    | main_statement
+    | eof;
+
+if_statement
+    = if, expression, colon, indentation, { statement }, dedent;
+
+else_if_statement
+    = else_if, expression, colon, indentation, { statement }, dedent;
+
+else_statement
+    = else, colon, indentation, { statement }, dedent;
+
+conditional_statement
+    = if_statement, { else_if_statement }, [ else_statement ];
+
+loop_statement
+    = loop, [ expression ], colon, indentation, { statement }, dedent;
+
+for_in_statement
+    = for, identifier, in, expression, colon, indentation, { statement }, dedent;
+
+all_loop_statement
+    = loop_statement
+    | for_in_statement;
+
+main_statement
+    = func, main, lparen, rparen, colon, indentation, { statement }, [ return_statement ], dedent;
+
+func
+    = fn
+    | function;
+
+func_statement
+    = func, identifier, lparen, func_param_group, rparen, func_return, colon, indentation, { statement }, [ return_statement ], dedent;
+
+return_statement
+    = return, [ expression ];
+
+func_call
+    = identifier, lparen, [ expression, { comma, expression } ], rparen;
+
+lambda
+    = lambda
+    | 'λ';
+
+lambda_statement
+    = lambda, func_param_group, func_return, double_arrow, expression;
+
+class_attributes_definition
+    = [ static
+    | pub ], [ const ], identifier, [ colon, type ], [ equal, expression ];
+
+class_method_definition
+    = [ static
+    | pub ], func_statement;
+
+class_statement
+    = class, identifier, [ lparen, identifier, { comma, identifier }, rparen ], colon, indentation, { class_attributes_definition
+    | class_method_definition }, dedent;
+
+assignment
+    = var_definition, identifier, [ colon, type ], equal, expression;
+
+ternary_expression
+    = expression, question, expression, colon, expression;
+
+pipe_expression
+    = expression, { pipe, identifier
+    | func_call };
+
+expression
+    = logical_or_expression
+    | ternary_expression
+    | pipe_expression;
+
+logical_or_expression
+    = logical_and_expression, { or, logical_and_expression };
+
+logical_and_expression
+    = comparison_expression, { and, comparison_expression };
+
+comparison_expression
+    = additive_expression, [ ( equal_equal
+    | not_equal
+    | less_than
+    | less_equal
+    | greater_than
+    | greater_equal ), additive_expression ];
+
+additive_expression
+    = term, { ( plus
+    | minus ), term };
+
+term
+    = unary, { ( multiply
+    | divide
+    | floor_div
+    | power
+    | mod ), unary };
+
+unary
+    = [ ( not
+    | minus ) ], factor;
+
+literal
+    = number_literal
+    | string_literal
+    | boolean_literal
+    | complex_literal
+    | string_interpolation;
+
+factor
+    = literal
+    | identifier
+    | func_call
+    | lambda_statement
+    | paren_expression;
