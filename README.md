@@ -40,7 +40,7 @@ The Sigil compiler is built with a modular architecture, following a classic mul
 |         Parser --(AST)-->         |
 |           |                       |
 |           v                       |
-|   Semantic Analyzer --(Valid )--> |
+|   Semantic Analyzer --(Validated AST)--> |
 |           |                       |
 |           v                       |
 |     Code Generator                |
