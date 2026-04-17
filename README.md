@@ -1,3 +1,6 @@
+> <strong>NOTICE:</strong> This project is hosted on [Sigil](https://git.rdenadai.dev/rdenadai/sigil)
+
+
 # Sigil
 
 <p align="center">
@@ -21,5 +24,3 @@ To build and run Sigil, you need the following dependencies installed on your sy
 - **[uv](https://docs.astral.sh/uv/)**: A fast Python package installer from Astral.
 - **[LLVM](https://releases.llvm.org/)**: The compiler infrastructure.
 - **GCC**: The GNU Compiler Collection.
-
-## This project is hosted on [Sigil](https://git.rdenadai.dev/rdenadai/sigil)
